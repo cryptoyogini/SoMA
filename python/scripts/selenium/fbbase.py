@@ -54,3 +54,16 @@ def like_all_posts(driver,pageurl,count=10):
 		driver.execute_script("window.scrollTo(0, document.body.scrollHeight);") 		
 	
 		i+=1	
+
+def post_to_wall(driver,msg,wallurl="https://facebook.com"):
+	driver.get(wallurl)
+	time.sleep(10)
+	element=driver.find_element_by_xpath("//textarea[@name='xhpc_message']")
+	element.click()
+	time.sleep(3)
+	element=driver.find_element_by_xpath("//div[@data-testid='status-attachment-mentions-input']")
+	element.click()
+	time.sleep(3)
+	element.send_keys(msg)
+	button=driver.find_element_by_xpath("//button[@data-testid='react-composer-post-button']")
+	button.click()
