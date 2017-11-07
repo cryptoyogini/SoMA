@@ -7,6 +7,10 @@ def setup(configfile):
 	config=ConfigParser.ConfigParser()
 	config.read(configfile)
 	return config
+
+def scroll_to_bottom(driver):
+	last_height=driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+	return last_height
 	
 def login_to_fb(configfile):
 	config=setup(configfile)
@@ -57,13 +61,25 @@ def like_all_posts(driver,pageurl,count=10):
 
 def post_to_wall(driver,msg,wallurl="https://facebook.com"):
 	driver.get(wallurl)
-	time.sleep(10)
-	element=driver.find_element_by_xpath("//textarea[@name='xhpc_message']")
-	element.click()
-	time.sleep(3)
+	time.sleep(7)
+	#driver.find_element_by_xpath("//textarea[@name='xhpc_message']")
+	#element.click()
+	#time.sleep(7)
 	element=driver.find_element_by_xpath("//div[@data-testid='status-attachment-mentions-input']")
 	element.click()
-	time.sleep(3)
+	time.sleep(7)
 	element.send_keys(msg)
 	button=driver.find_element_by_xpath("//button[@data-testid='react-composer-post-button']")
 	button.click()
+
+def get_notifications(driver,count=10):
+	driver.get("https://facebook.com/notifications")
+	notifications=[]
+	last_height = scroll_to_bottom(driver)
+	while len(notifications)<count:
+		notifications=driver.find_elements_by_xpath("//ul[@data-testid='see_all_list']")
+		new_height=scroll_to_bottom(driver)
+		if new_height==last_height:
+			break
+		last_height=new_height
+	return notifications
