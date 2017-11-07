@@ -2,15 +2,15 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 import ConfigParser
-import time
+import time,os
 def setup(configfile):
 	config=ConfigParser.ConfigParser()
 	config.read(configfile)
 	return config
 
 def scroll_to_bottom(driver):
-	last_height=driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-	return last_height
+	driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
 	
 def login_to_fb(configfile):
 	config=setup(configfile)
@@ -29,6 +29,10 @@ def login_to_fb(configfile):
 	elem.send_keys(Keys.RETURN)
 	return driver
 
+def get_self_profile(driver):
+	plink=driver.find_element_by_xpath("//a[@title='Profile']")
+	profile=plink.get_attribute("href")
+	return profile
 #elem = driver.find_element_by_css_selector(".input.textInput")
 #elem.send_keys("Posted using Python's Selenium WebDriver bindings!")
 #elem = driver.find_element_by_css_selector("input[value=\"Publicar\"]")
@@ -68,18 +72,39 @@ def post_to_wall(driver,msg,wallurl="https://facebook.com"):
 	element=driver.find_element_by_xpath("//div[@data-testid='status-attachment-mentions-input']")
 	element.click()
 	time.sleep(7)
-	element.send_keys(msg)
+	element.send_keys(unicode(msg.decode('utf-8')))
+	time.sleep(10)
 	button=driver.find_element_by_xpath("//button[@data-testid='react-composer-post-button']")
 	button.click()
 
 def get_notifications(driver,count=10):
 	driver.get("https://facebook.com/notifications")
+	last_height = driver.execute_script("return document.body.scrollHeight")
+	scroll_to_bottom(driver)
+	print last_height
+	time.sleep(5)
 	notifications=[]
-	last_height = scroll_to_bottom(driver)
 	while len(notifications)<count:
-		notifications=driver.find_elements_by_xpath("//ul[@data-testid='see_all_list']")
-		new_height=scroll_to_bottom(driver)
+		notificationslist=driver.find_element_by_xpath("//ul[@data-testid='see_all_list']")
+		notifications=notificationslist.find_elements_by_xpath("//li")
+		scroll_to_bottom(driver)
+		time.sleep(5)
+		new_height= driver.execute_script("return document.body.scrollHeight")
+		print new_height
+		
 		if new_height==last_height:
 			break
 		last_height=new_height
 	return notifications
+def post_fortune_to_wall(driver,wallurl,count=20,fortunefile='',hashtag=""):
+	for i in range(0,count):
+		sleeptime=73+2*i
+		msg=os.popen("fortune %s" %fortunefile).read().strip()
+		msg=msg+"\n"+hashtag
+		print msg
+		try:
+			post_to_wall(driver,msg,wallurl)
+		except:
+			print "Post failed, trying again in %s seconds" %sleeptime 
+		print "Sleeping for %s seconds" %sleeptime 
+		time.sleep(sleeptime)
