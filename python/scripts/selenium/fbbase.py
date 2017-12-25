@@ -3,6 +3,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 import ConfigParser
 import time,os
+
+
 def setup(configfile):
 	config=ConfigParser.ConfigParser()
 	config.read(configfile)
@@ -14,8 +16,8 @@ def scroll_to_bottom(driver):
 	
 def login_to_fb(configfile):
 	config=setup(configfile)
-	usr = config.get("User","username")
-	pwd = config.get("User","password")
+	usr = config.get("User","fbusername")
+	pwd = config.get("User","fbpassword")
 	firefox_profile = webdriver.FirefoxProfile()
 	firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
 	driver = webdriver.Firefox(firefox_profile=firefox_profile)
@@ -43,7 +45,7 @@ def like_page_toggle(driver,pageurl):
 	likebutton=driver.find_element_by_xpath("//button[@data-testid='page_profile_like_button_test_id']")
 	likebutton.click()
 #driver.close()
-
+#DONE
 def like_all_posts(driver,pageurl,count=10):
 	driver.get(pageurl)
 	time.sleep(10)
