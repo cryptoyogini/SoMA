@@ -3,6 +3,7 @@ sys.path.append("/opt/SoMA/python/lib")
 from libsoma import *
 
 if __name__=="__main__":
+	
 		mn=SoMAPerson("/home/arjun/ids/mn.conf")
 		pa=SoMAPerson("/home/arjun/ids/pa.conf")
 		mn.fb_login()

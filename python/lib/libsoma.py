@@ -53,7 +53,7 @@ class SoMAPerson:
 		if not os.path.exists(self.sessionjsonpath):
 			os.mkdir(self.sessionjsonpath)	
 			
-	def download_file(self,url,path=None,filename=None,prefix=None):
+	def download_file(self,url,path=None,filename=None,prefix=None,suffix=None):
 		print "Trying to download "+ url
 		if path==None:
 			path=self.sessiondownloaddir
@@ -61,6 +61,8 @@ class SoMAPerson:
 			filename=str(uuid4())
 		if prefix != None:
 			filename=prefix+filename
+		if suffix != None:
+			filename=filename+suffix
 		try:
 			response = urllib2.urlopen(url)
 			data=response.read()
@@ -101,6 +103,7 @@ class SoMAPerson:
 		elem.send_keys(self.fbpwd)
 		elem.send_keys(Keys.RETURN)
 		self.fbdriver=driver
+		time.sleep(10)
 	
 	def fb_scroll_to_bottom(self):
 		self.fbdriver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -304,8 +307,8 @@ class SoMAPerson:
 	def fb_download_image_set(self,imageset):
 		imagesjson=imageset['images']
 		for image in imagesjson:
-			imagefile=self.download_file(image['src'],prefix=imageset['prefix'])
-			image['localfile']=imagefile+".jpg"
+			imagefile=self.download_file(image['src'],prefix=imageset['prefix'],suffix=".jpg")
+			image['localfile']=imagefile
 		return imageset
 	def fb_get_image_set(self,url,count=50,setname=None):
 		imageset={}
