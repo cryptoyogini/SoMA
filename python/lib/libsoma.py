@@ -45,19 +45,22 @@ class SoMAPerson:
 		sessiondir=sessionpathprefix+"-"+ts.strftime("%Y%b%d-%H%M%S")
 		self.sessionpath=os.path.join(self.datapath,sessiondir)
 		self.sessiondownloaddir=os.path.join(self.sessionpath,"downloads")
-		
+		self.sessionjsonpath=os.path.join(self.sessionpath,"json")
 		if not os.path.exists(self.sessionpath):
 			os.mkdir(self.sessionpath)
 		if not os.path.exists(self.sessiondownloaddir):
 			os.mkdir(self.sessiondownloaddir)
+		if not os.path.exists(self.sessionjsonpath):
+			os.mkdir(self.sessionjsonpath)	
 			
-			
-	def download_file(self,url,path=None,filename=None):
+	def download_file(self,url,path=None,filename=None,prefix=None):
 		print "Trying to download "+ url
 		if path==None:
 			path=self.sessiondownloaddir
 		if filename==None:
 			filename=str(uuid4())
+		if prefix != None:
+			filename=prefix+filename
 		try:
 			response = urllib2.urlopen(url)
 			data=response.read()
@@ -66,6 +69,21 @@ class SoMAPerson:
 			f.write(data)
 			f.close()
 			
+			return fname
+		except:
+			return None
+	
+	def save_json(self,jsonobj,path=None,filename=None):
+		print "Trying to save json"
+		if path==None:
+			path=self.sessionjsonpath
+		if filename==None:
+			filename=str(uuid4())+".json"
+		try:
+			fname=os.path.join(path,filename)
+			f=open(fname,"w")
+			f.write(json.dumps(jsonobj,indent=4,sort_keys=True))
+			f.close()
 			return fname
 		except:
 			return None
@@ -224,6 +242,8 @@ class SoMAPerson:
 			imagetag=links[0].find("img")
 			friend['imagelink']=imagetag.get("src")
 			friend['profileurl']=links[0].get("href").split("&")[0]
+			if "?fref=pb" in friend['profileurl']:
+				friend['profileurl']=friend['profileurl'].replace("?fref=pb","")
 			friend['name']=imagetag.get("aria-label")
 			friends.append(friend)
 			for link in links:
@@ -237,4 +257,65 @@ class SoMAPerson:
 					
 
 		return friends
+	
+	def fb_get_friend_tabs(self,profileurl):
+		tabs={}
+		self.fb_goto_url(profileurl)
+		time.sleep(5)
+		phototab=self.fbdriver.find_element_by_xpath("//a[@data-tab-key='photos']").get_property("href")
+		friendtab=self.fbdriver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("href")
+		abouttab=self.fbdriver.find_element_by_xpath("//a[@data-tab-key='about']").get_property("href")
+		tabs['friends']=friendtab
+		tabs['photos']=phototab
+		tabs['about']=abouttab
+		return tabs
+	
+	
+	def fb_update_friends_json(self,frjson):
+		for friend in frjson:
+			profileurl=friend['profileurl']
+			friend['tabs']=self.fb_get_friend_tabs(profileurl)
+		return frjson
+	
+	def fb_get_image_set_manifest(self,imageset):
+		self.fb_goto_url(imageset['url'])
+		time.sleep(5)
+		imageicons=self.fbdriver.find_elements_by_class_name("uiMediaThumbImg")
+		images=[]
+		counter=0
+		imageicons[0].click()
+		while counter<imageset['count']:
+			image={}
+			time.sleep(5)
+			imageelement=self.fbdriver.find_element_by_class_name("spotlight")
+			alttext=imageelement.get_property("alt")
+			imagesrc=imageelement.get_property("src")
+			image['alttext']=alttext
+			image['src']=imagesrc
+			images.append(image)
+			counter+=1
+			self.fbdriver.find_element_by_class_name("next").click()
+		self.fbdriver.find_element_by_link_text("Close").click()
 		
+		imageset['images']=images
+		
+		return imageset
+	
+	def fb_download_image_set(self,imageset):
+		imagesjson=imageset['images']
+		for image in imagesjson:
+			imagefile=self.download_file(image['src'],prefix=imageset['prefix'])
+			image['localfile']=imagefile+".jpg"
+		return imageset
+	def fb_get_image_set(self,url,count=50,setname=None):
+		imageset={}
+		if setname==None:
+			setname=str(uuid4())
+		imageset['url']=url
+		imageset['count']=count
+		imageset['name']=setname
+		imageset['prefix']=setname+"-"
+		imageset=self.fb_get_image_set_manifest(imageset)
+		imageset=self.fb_download_image_set(imageset)
+		jsonname=self.save_json(imageset,filename=imageset['name']+".json")
+		return jsonname
