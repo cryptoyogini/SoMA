@@ -31,8 +31,33 @@ class SoMAPost:
 			self.attributes=json.loads(jsoncontent,object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
 			#This just loads the same content into a dict as well
 			self.dictionary=json.loads(jsoncontent)
-		
+
 class SoMAPerson:
+	def __init__(self,jsonfile):
+		self.jsonfile=jsonfile	
+		if not os.path.exists(jsonfile):
+			self.uuid=str(uuid4())
+			self.jsonprofile={}
+			self.jsonprofile['uuid']=self.uuid
+			with open(jsonfile,"w") as f:
+				f.write(json.dumps(self.jsonprofile,indent=4,sort_keys=True))
+		else:
+			#This just loads the same content into a dict as well
+			with open(jsonfile,"r") as f:
+				self.jsonprofile=json.loads(f.read())
+			self.uuid=self.jsonprofile['uuid']
+	def show_profile(self):
+		print json.dumps(self.jsonprofile,indent=4,sort_keys=True)
+	def save_profile(self):
+		with open(self.jsonfile,"w") as f:
+			f.write(json.dumps(self.jsonprofile,indent=4,sort_keys=True))
+	def get_property(self,propertyname):
+		return self.jsonprofile[propertyname]
+	def set_property(self,propertyname,value):
+		self.jsonprofile[propertyname]=value
+		
+
+class SoMAFBCyborg:
 	def __init__(self,configfile):
 		config=ConfigParser.ConfigParser()
 		config.read(configfile)
@@ -261,7 +286,7 @@ class SoMAPerson:
 
 		return friends
 	
-	def fb_get_friend_tabs(self,profileurl):
+	def fb_get_profile_tabs(self,profileurl):
 		tabs={}
 		self.fb_goto_url(profileurl)
 		time.sleep(5)
