@@ -76,7 +76,18 @@ class SoMAPerson:
 		fbprofiles.append(fbprofilejson)
 		self.set_property("fbprofiles",fbprofiles)
 		self.set_property("name",fbprofile['fbdisplayname'].replace("\n"," "))
-		self.save_profile()
+	
+		
+	def add_note(self,text):
+		notes=self.get_property("notes")
+		if notes==None:
+			notes=[]
+		ts=datetime.now().strftime("%Y-%d-%m %H:%M:%S")
+		notedict={}
+		notedict['ts']=ts
+		notedict['text']=text
+		notes.append(notedict)
+		self.set_property("notes",notes)
 
 class SoMACyborg:
 	def __init__(self,configfile,headless=False):
@@ -391,6 +402,8 @@ class SoMACyborg:
 		self.goto_url(imageset['url'])
 		time.sleep(5)
 		imageicons=self.driver.find_elements_by_class_name("uiMediaThumbImg")
+		if len(imageicons)==0:
+			imageicons=self.driver.find_elements_by_class_name("_2eea")
 		images=[]
 		counter=0
 		imageicons[0].click()
@@ -398,7 +411,7 @@ class SoMACyborg:
 		while counter<imageset['count']:
 			
 			image={}
-			time.sleep(5)
+			time.sleep(15)
 			imageelement=self.driver.find_element_by_class_name("spotlight")
 			alttext=imageelement.get_property("alt")
 			imagesrc=imageelement.get_property("src")
