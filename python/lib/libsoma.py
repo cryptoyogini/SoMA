@@ -379,7 +379,6 @@ class SoMACyborg:
 				time.sleep(10)
 			fblikers=list(set(fblikers))
 			self.scroll_page()
-			print fblikers
 		return fblikers[:count]
 	
 	def fb_update_friends_json(self,frjson):
