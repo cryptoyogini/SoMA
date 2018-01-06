@@ -58,7 +58,7 @@ class SoMAPerson:
 		
 
 class SoMAFBCyborg:
-	def __init__(self,configfile):
+	def __init__(self,configfile,headless=False):
 		config=ConfigParser.ConfigParser()
 		config.read(configfile)
 		self.config=config
@@ -76,7 +76,16 @@ class SoMAFBCyborg:
 		if not os.path.exists(self.sessiondownloaddir):
 			os.mkdir(self.sessiondownloaddir)
 		if not os.path.exists(self.sessionjsonpath):
-			os.mkdir(self.sessionjsonpath)	
+			os.mkdir(self.sessionjsonpath)
+		
+		if headless==True:
+			os.environ['MOZ_HEADLESS'] = '1'
+		
+		firefox_profile = webdriver.FirefoxProfile()
+		firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
+		driver = webdriver.Firefox(firefox_profile=firefox_profile)
+		self.driver=driver
+		
 			
 	def download_file(self,url,path=None,filename=None,prefix=None,suffix=None):
 		print "Trying to download "+ url
@@ -114,55 +123,98 @@ class SoMAFBCyborg:
 			return fname
 		except:
 			return None
+		
 	
 	def fb_login(self):
-		firefox_profile = webdriver.FirefoxProfile()
-		firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
-		driver = webdriver.Firefox(firefox_profile=firefox_profile)
 		# or you can use Chrome(executable_path="/usr/bin/chromedriver")
-		driver.get("http://www.facebook.com")
-		assert "Facebook" in driver.title
-		elem = driver.find_element_by_id("email")
+		self.driver.get("http://www.facebook.com")
+		assert "Facebook" in self.driver.title
+		elem = self.driver.find_element_by_id("email")
 		elem.send_keys(self.fbusr)
-		elem = driver.find_element_by_id("pass")
+		elem = self.driver.find_element_by_id("pass")
 		elem.send_keys(self.fbpwd)
 		elem.send_keys(Keys.RETURN)
-		self.fbdriver=driver
 		time.sleep(10)
 	
-	def fb_scroll_to_bottom(self):
-		self.fbdriver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+	def scroll_to_bottom(self):
+		ticks_at_bottom = 0
+		while True:
+			js_scroll_code = "if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {return true;} else {return false;}"
+			if self.driver.execute_script(js_scroll_code):
+				if ticks_at_bottom > 1000:
+					break
+				else:
+					ticks_at_bottom += 1
+			else:
+				self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+				ticks_at_bottom = 0
+		print("At bottom of page.")
+		
+		#self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 	
-	def fb_set_self_profile(self):
-		plink=self.fbdriver.find_element_by_xpath("//a[@title='Profile']")
-		profile=plink.get_attribute("href")
-		self.fbprofileurl=profile
-		self.fbdriver.get(self.fbprofileurl)	
-		self.fbdisplayname=self.fb_get_cur_page_displayname()
-		friendstab=self.fbdriver.find_elements_by_xpath("//a[@data-tab-key='friends']")[0]
-		self.fbfriendcount=int(friendstab.get_property("text").replace("Friends",""))
-		self.fbfriendsurl=friendstab.get_property("href")
+	def fb_load_profile_from_json(self,jsonpath):
+		profiledata={}
+		if os.path.exists(jsonpath):
+			with open(jsonpath) as f:
+				profiledata=json.load(f)
+		return profiledata
+	
+	def fb_get_profile_data(self,url):
+		profiledata={}
+		self.fb_goto_url(url)
+		time.sleep(5)
+		profiledata['url']=self.driver.current_url
+		#plink=self.driver.find_element_by_xpath("//a[@title='Profile']")
+	
+		profiledata['fbdisplayname']=self.fb_get_cur_page_displayname()
+		
+		profiledata['tabdata'] = self.fb_get_profile_tab_data(url)
+		profiledata['friendcount']=profiledata['tabdata']['friends']['count']
+		return profiledata
+		
+	def fb_get_profile_tab_data(self,profileurl):
+		tabdata={"friends":{},"photos":{},"about":{}}
+		self.fb_goto_url(profileurl)
+		time.sleep(5)
+		phototab=self.driver.find_element_by_xpath("//a[@data-tab-key='photos']").get_property("href")
+		friendtab=self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("href")
+		abouttab=self.driver.find_element_by_xpath("//a[@data-tab-key='about']").get_property("href")
+		tabdata['friends']['url']=friendtab
+		if self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("text").replace("Friends","") != "":
+			tabdata['friends']['count']=int(self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("text").replace("Friends",""))
+		else:
+			tabdata['friends']['count']=-1
+		tabdata['photos']['url']=phototab
+		tabdata['about']['url']=abouttab
+		return tabdata
+	
+		
+	def fb_update_self_profile(self):
+		self.fbprofiledata=self.fb_get_profile_data("http://facebook.com/profile.php")
+		
+		
+		
 	
 	def fb_get_cur_page_displayname(self):
-		displayname=self.fbdriver.find_element_by_id("fb-timeline-cover-name").find_element_by_tag_name("a").text
+		displayname=self.driver.find_element_by_id("fb-timeline-cover-name").find_element_by_tag_name("a").text
 		return displayname
 	
 	def fb_like_page_toggle(self,pageurl):
-		self.fbdriver.get(pageurl)
-		likebutton=self.fbdriver.find_element_by_xpath("//button[@data-testid='page_profile_like_button_test_id']")
+		self.driver.get(pageurl)
+		likebutton=self.driver.find_element_by_xpath("//button[@data-testid='page_profile_like_button_test_id']")
 		likebutton.click()
 	
 	def fb_goto_url(self,url):
- 		self.fbdriver.get(url)
+ 		self.driver.get(url)
 	
 	def fb_like_all_posts(self,pageurl,count=10):
-		self.fbdriver.get(pageurl)
+		self.driver.get(pageurl)
 		time.sleep(10)
-		self.fbdriver.execute_script("window.scrollTo(0, document.body.scrollHeight);") 		
+		self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);") 		
 		time.sleep(10)	
 		for i in range (0,count):
 			time.sleep(5)
-			postlikebuttons=self.fbdriver.find_elements_by_xpath("//a[@data-testid='fb-ufi-likelink']")
+			postlikebuttons=self.driver.find_elements_by_xpath("//a[@data-testid='fb-ufi-likelink']")
 			for button in postlikebuttons:
 				try:
 					button.click()
@@ -170,37 +222,37 @@ class SoMAFBCyborg:
 				except:
 					print "Ouch!"
 				time.sleep(5)
-			self.fbdriver.execute_script("window.scrollTo(0, document.body.scrollHeight);") 		
+			self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);") 		
 		
 			i+=1	
 
 	def fb_post_to_wall(self,msg,wallurl="https://facebook.com"):
-		self.fbdriver.get(wallurl)
+		self.driver.get(wallurl)
 		time.sleep(7)
 		#driver.find_element_by_xpath("//textarea[@name='xhpc_message']")
 		#element.click()
 		#time.sleep(7)
-		element=self.fbdriver.find_element_by_xpath("//div[@data-testid='status-attachment-mentions-input']")
+		element=self.driver.find_element_by_xpath("//div[@data-testid='status-attachment-mentions-input']")
 		element.click()
 		time.sleep(7)
 		element.send_keys(unicode(msg.decode('utf-8')))
 		time.sleep(10)
-		button=self.fbdriver.find_element_by_xpath("//button[@data-testid='react-composer-post-button']")
+		button=self.driver.find_element_by_xpath("//button[@data-testid='react-composer-post-button']")
 		button.click()
 
 	def fb_get_notifications(self,count=10):
-		self.fbdriver.get("https://facebook.com/notifications")
-		last_height = self.fbdriver.execute_script("return document.body.scrollHeight")
-		self.fb_scroll_to_bottom()
+		self.driver.get("https://facebook.com/notifications")
+		last_height = self.driver.execute_script("return document.body.scrollHeight")
+		self.scroll_to_bottom()
 		print last_height
 		time.sleep(5)
 		notifications=[]
 		while len(notifications)<count:
-			notificationslist=self.fbdriver.find_element_by_xpath("//ul[@data-testid='see_all_list']")
+			notificationslist=self.driver.find_element_by_xpath("//ul[@data-testid='see_all_list']")
 			notifications=notificationslist.find_elements_by_xpath("//li")
 			scroll_to_bottom(driver)
 			time.sleep(5)
-			new_height= self.fbdriver.execute_script("return document.body.scrollHeight")
+			new_height= self.driver.execute_script("return document.body.scrollHeight")
 			print new_height
 			
 			if new_height==last_height:
@@ -221,19 +273,6 @@ class SoMAFBCyborg:
 			print "Sleeping for %s seconds" %sleeptime 
 			time.sleep(sleeptime)
 
-	def fb_update_friend_count(self):
-		self.fbdriver.get(self.fbprofileurl)
-		friendstab=self.fbdriver.find_elements_by_xpath("//a[@data-tab-key='friends']")[0]
-		self.fbfriendcount=int(friendstab.get_property("text").replace("Friends",""))
-		self.fbfriendsurl=friendstab.get_property("href")
-	
-	def fb_attributes(self):
-		fb_attributes={}
-		fb_attributes['username']=self.fbusr
-		fb_attributes['profileurl']=self.fbprofileurl
-		fb_attributes['friendcount']=self.fbfriendcount
-		fb_attributes['displayname']=self.fbdisplayname
-		return fb_attributes
 	
 	def fb_get_friends(self,count=50,friendspage=None,download_images=False):
 		if count>=self.fbfriendcount:
@@ -242,17 +281,17 @@ class SoMAFBCyborg:
 		friends=[]
 		if friendspage==None:
 			friendspage=self.fbfriendsurl
-		self.fbdriver.get(friendspage)
+		self.driver.get(friendspage)
 		frienddivs=[]
 		while len(frienddivs)<count:
 			prevlen = len(frienddivs)
-			newfrienddivs=self.fbdriver.find_elements_by_xpath("//div[@data-testid='friend_list_item']")
+			newfrienddivs=self.driver.find_elements_by_xpath("//div[@data-testid='friend_list_item']")
 			frienddivs+=newfrienddivs
 			frienddivs=list(set(frienddivs))
 			if len(frienddivs)==prevlen:
 				print "Some of this persons friends have gone away"
 				break
-			self.fb_scroll_to_bottom()
+			self.scroll_to_bottom()
 			time.sleep(10)
 		frienddivs=frienddivs[:count]
 		
@@ -286,17 +325,7 @@ class SoMAFBCyborg:
 
 		return friends
 	
-	def fb_get_profile_tabs(self,profileurl):
-		tabs={}
-		self.fb_goto_url(profileurl)
-		time.sleep(5)
-		phototab=self.fbdriver.find_element_by_xpath("//a[@data-tab-key='photos']").get_property("href")
-		friendtab=self.fbdriver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("href")
-		abouttab=self.fbdriver.find_element_by_xpath("//a[@data-tab-key='about']").get_property("href")
-		tabs['friends']=friendtab
-		tabs['photos']=phototab
-		tabs['about']=abouttab
-		return tabs
+	
 	
 	
 	def fb_update_friends_json(self,frjson):
@@ -308,22 +337,22 @@ class SoMAFBCyborg:
 	def fb_get_image_set_manifest(self,imageset):
 		self.fb_goto_url(imageset['url'])
 		time.sleep(5)
-		imageicons=self.fbdriver.find_elements_by_class_name("uiMediaThumbImg")
+		imageicons=self.driver.find_elements_by_class_name("uiMediaThumbImg")
 		images=[]
 		counter=0
 		imageicons[0].click()
 		while counter<imageset['count']:
 			image={}
 			time.sleep(5)
-			imageelement=self.fbdriver.find_element_by_class_name("spotlight")
+			imageelement=self.driver.find_element_by_class_name("spotlight")
 			alttext=imageelement.get_property("alt")
 			imagesrc=imageelement.get_property("src")
 			image['alttext']=alttext
 			image['src']=imagesrc
 			images.append(image)
 			counter+=1
-			self.fbdriver.find_element_by_class_name("next").click()
-		self.fbdriver.find_element_by_link_text("Close").click()
+			self.driver.find_element_by_class_name("next").click()
+		self.driver.find_element_by_link_text("Close").click()
 		
 		imageset['images']=images
 		
