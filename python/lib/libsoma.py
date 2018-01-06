@@ -12,7 +12,7 @@ import ConfigParser
 import time,os,urllib2
 from datetime import datetime
 from uuid import *
-
+from pygments import highlight, lexers, formatters
 DEBUG=False
 
 
@@ -20,6 +20,15 @@ DEBUG=False
 '''
 SoMA Post objects store a JSON object as a named tuple as well as a dictionary, so that attributes can be referenced both in the dot notation as well as by key/value lookups. 
 '''
+
+def get_color_json(dictionary):
+	formatted_json=get_formatted_json(dictionary)
+	colorful_json = highlight(unicode(formatted_json, 'UTF-8'), lexers.JsonLexer(), formatters.TerminalFormatter())
+	return colorful_json
+
+def get_formatted_json(dictionary):
+	formatted_json=json.dumps(dictionary,sort_keys=True, indent=4)
+	return formatted_json
 
 class SoMAPost:
 	def __init__(self,jsoncontent=None):
@@ -47,17 +56,29 @@ class SoMAPerson:
 				self.jsonprofile=json.loads(f.read())
 			self.uuid=self.jsonprofile['uuid']
 	def show_profile(self):
-		print json.dumps(self.jsonprofile,indent=4,sort_keys=True)
+		print get_color_json(self.jsonprofile)
 	def save_profile(self):
 		with open(self.jsonfile,"w") as f:
 			f.write(json.dumps(self.jsonprofile,indent=4,sort_keys=True))
 	def get_property(self,propertyname):
-		return self.jsonprofile[propertyname]
+		if propertyname in self.jsonprofile.keys():
+			return self.jsonprofile[propertyname]
+		else:
+			return None
 	def set_property(self,propertyname,value):
 		self.jsonprofile[propertyname]=value
-		
+	def populate_fbprofile(self,cyborg,url):
+		fbprofile=cyborg.fb_get_profile_data(url)
+		fbprofilejson=cyborg.save_json(fbprofile,path=os.path.split(self.jsonfile)[0])
+		fbprofiles=self.get_property("fbprofiles")
+		if fbprofiles==None:
+			fbprofiles=[]
+		fbprofiles.append(fbprofilejson)
+		self.set_property("fbprofiles",fbprofiles)
+		self.set_property("name",fbprofile['fbdisplayname'].replace("\n"," "))
+		self.save_profile()
 
-class SoMAFBCyborg:
+class SoMACyborg:
 	def __init__(self,configfile,headless=False):
 		config=ConfigParser.ConfigParser()
 		config.read(configfile)
@@ -85,7 +106,11 @@ class SoMAFBCyborg:
 		firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
 		driver = webdriver.Firefox(firefox_profile=firefox_profile)
 		self.driver=driver
-		
+	
+	
+	def goto_url(self,url):
+ 		self.driver.get(url)
+ 		
 			
 	def download_file(self,url,path=None,filename=None,prefix=None,suffix=None):
 		print "Trying to download "+ url
@@ -135,7 +160,8 @@ class SoMAFBCyborg:
 		elem.send_keys(self.fbpwd)
 		elem.send_keys(Keys.RETURN)
 		time.sleep(10)
-	
+	def scroll_page(self):
+		self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 	def scroll_to_bottom(self):
 		ticks_at_bottom = 0
 		while True:
@@ -151,7 +177,8 @@ class SoMAFBCyborg:
 		print("At bottom of page.")
 		
 		#self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-	
+	def close_modal(self):
+		self.driver.find_element_by_link_text("Close").click()
 	def fb_load_profile_from_json(self,jsonpath):
 		profiledata={}
 		if os.path.exists(jsonpath):
@@ -161,9 +188,16 @@ class SoMAFBCyborg:
 	
 	def fb_get_profile_data(self,url):
 		profiledata={}
-		self.fb_goto_url(url)
+		self.goto_url(url)
 		time.sleep(5)
-		profiledata['url']=self.driver.current_url
+		
+		profile=self.driver.current_url
+		if profile=="http://facebook.com/profile.php":
+			plink=self.fbdriver.find_element_by_xpath("//a[@title='Profile']")
+			profile=plink.get_attribute("href")
+			
+		
+		profiledata['url']=profile
 		#plink=self.driver.find_element_by_xpath("//a[@title='Profile']")
 	
 		profiledata['fbdisplayname']=self.fb_get_cur_page_displayname()
@@ -174,13 +208,13 @@ class SoMAFBCyborg:
 		
 	def fb_get_profile_tab_data(self,profileurl):
 		tabdata={"friends":{},"photos":{},"about":{}}
-		self.fb_goto_url(profileurl)
+		self.goto_url(profileurl)
 		time.sleep(5)
 		phototab=self.driver.find_element_by_xpath("//a[@data-tab-key='photos']").get_property("href")
 		friendtab=self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("href")
 		abouttab=self.driver.find_element_by_xpath("//a[@data-tab-key='about']").get_property("href")
 		tabdata['friends']['url']=friendtab
-		if self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("text").replace("Friends","") != "":
+		if self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("text").replace("Friends","") != "" and "Mutual" not in self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("text"):
 			tabdata['friends']['count']=int(self.driver.find_element_by_xpath("//a[@data-tab-key='friends']").get_property("text").replace("Friends",""))
 		else:
 			tabdata['friends']['count']=-1
@@ -204,8 +238,8 @@ class SoMAFBCyborg:
 		likebutton=self.driver.find_element_by_xpath("//button[@data-testid='page_profile_like_button_test_id']")
 		likebutton.click()
 	
-	def fb_goto_url(self,url):
- 		self.driver.get(url)
+		
+ 	
 	
 	def fb_like_all_posts(self,pageurl,count=10):
 		self.driver.get(pageurl)
@@ -326,7 +360,27 @@ class SoMAFBCyborg:
 		return friends
 	
 	
-	
+	def fb_get_likers(self,url,count=10):
+		fblikers=[]
+		self.goto_url(url)
+		time.sleep(10)
+		while len(fblikers)<count:
+			
+			likes=self.driver.find_elements_by_class_name("_3emk")
+			for like in likes:
+				like.click()
+				time.sleep(10)
+				profiles=self.driver.find_elements_by_class_name("_5i_q")
+				for profile in profiles:
+					psoup=BeautifulSoup(profile.get_property("innerHTML"))
+					a=psoup.find("a").get("href")
+					fblikers.append(a)
+				self.close_modal()
+				time.sleep(10)
+			fblikers=list(set(fblikers))
+			self.scroll_page()
+			print fblikers
+		return fblikers[:count]
 	
 	def fb_update_friends_json(self,frjson):
 		for friend in frjson:
@@ -335,13 +389,15 @@ class SoMAFBCyborg:
 		return frjson
 	
 	def fb_get_image_set_manifest(self,imageset):
-		self.fb_goto_url(imageset['url'])
+		self.goto_url(imageset['url'])
 		time.sleep(5)
 		imageicons=self.driver.find_elements_by_class_name("uiMediaThumbImg")
 		images=[]
 		counter=0
 		imageicons[0].click()
+		skip=imageset['skip']
 		while counter<imageset['count']:
+			
 			image={}
 			time.sleep(5)
 			imageelement=self.driver.find_element_by_class_name("spotlight")
@@ -349,8 +405,14 @@ class SoMAFBCyborg:
 			imagesrc=imageelement.get_property("src")
 			image['alttext']=alttext
 			image['src']=imagesrc
-			images.append(image)
-			counter+=1
+			if skip>0:
+				print "Skipping this image"
+				skip=skip-1
+				self.driver.find_element_by_class_name("next").click()
+				continue
+			else:
+				images.append(image)
+				counter+=1
 			self.driver.find_element_by_class_name("next").click()
 		self.driver.find_element_by_link_text("Close").click()
 		
@@ -364,7 +426,7 @@ class SoMAFBCyborg:
 			imagefile=self.download_file(image['src'],prefix=imageset['prefix'],suffix=".jpg")
 			image['localfile']=imagefile
 		return imageset
-	def fb_get_image_set(self,url,count=50,setname=None):
+	def fb_get_image_set(self,url,count=50,skip=0,setname=None):
 		imageset={}
 		if setname==None:
 			setname=str(uuid4())
@@ -372,6 +434,7 @@ class SoMAFBCyborg:
 		imageset['count']=count
 		imageset['name']=setname
 		imageset['prefix']=setname+"-"
+		imageset['skip']=skip
 		imageset=self.fb_get_image_set_manifest(imageset)
 		imageset=self.fb_download_image_set(imageset)
 		jsonname=self.save_json(imageset,filename=imageset['name']+".json")

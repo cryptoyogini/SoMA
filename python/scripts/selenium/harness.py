@@ -3,21 +3,24 @@ sys.path.append("/opt/SoMA/python/lib")
 from libsoma import *
 
 if __name__=="__main__":
-			'''
-		ab=SoMACyborg("/home/arjun/ids/ab.conf")
+		
+		'''
+		ab=SoMACyborg("/home/cryptoyogini/ids/ab.conf")
 		ab.fb_login()
-		ab.fb_set_self_profile()
-		ab.fb_update_friend_count()
+		ab.fb_update_self_profile()
+		print ab.fbprofiledata
 		
-		mn=SoMACyborg("/home/arjun/ids/mn.conf")
+		'''
+		mn=SoMACyborg("/home/cryptoyogini/ids/mn.conf")
 		mn.fb_login()
-		mn.fb_set_self_profile()
-		mn.fb_update_friend_count()
+		mn.fb_update_self_profile()
+		print get_color_json(mn.fbprofiledata)
 		
 	
+		'''
 	
-		pa=SoMAPerson("/home/arjun/ids/pa.conf")
+		pa=SoMACyborg("/home/cryptoyogini/ids/pa.conf")
 		pa.fb_login()
-		pa.fb_set_self_profile()
-		pa.fb_update_friend_count()
+		pa.fb_update_self_profile()
+		print pa.fbprofiledata
 		'''
