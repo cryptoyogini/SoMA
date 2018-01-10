@@ -76,8 +76,7 @@ class SoMAPerson:
 		fbprofiles.append(fbprofilejson)
 		self.set_property("fbprofiles",fbprofiles)
 		self.set_property("name",fbprofile['fbdisplayname'].replace("\n"," "))
-	
-		
+		self.set_property("profilepic",fbprofile['profilepic'])
 	def add_note(self,text):
 		notes=self.get_property("notes")
 		if notes==None:
@@ -121,8 +120,7 @@ class SoMACyborg:
 	
 	def goto_url(self,url):
  		self.driver.get(url)
- 		
-			
+ 			
 	def download_file(self,url,path=None,filename=None,prefix=None,suffix=None):
 		print "Trying to download "+ url
 		if path==None:
@@ -159,20 +157,11 @@ class SoMACyborg:
 			return fname
 		except:
 			return None
-		
-	
-	def fb_login(self):
-		# or you can use Chrome(executable_path="/usr/bin/chromedriver")
-		self.driver.get("http://www.facebook.com")
-		assert "Facebook" in self.driver.title
-		elem = self.driver.find_element_by_id("email")
-		elem.send_keys(self.fbusr)
-		elem = self.driver.find_element_by_id("pass")
-		elem.send_keys(self.fbpwd)
-		elem.send_keys(Keys.RETURN)
-		time.sleep(10)
+
 	def scroll_page(self):
 		self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+		
+	
 	def scroll_to_bottom(self):
 		ticks_at_bottom = 0
 		while True:
@@ -187,9 +176,23 @@ class SoMACyborg:
 				ticks_at_bottom = 0
 		print("At bottom of page.")
 		
-		#self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 	def close_modal(self):
 		self.driver.find_element_by_link_text("Close").click()
+
+	
+		
+	def fb_login(self):
+		# or you can use Chrome(executable_path="/usr/bin/chromedriver")
+		self.driver.get("http://www.facebook.com")
+		assert "Facebook" in self.driver.title
+		elem = self.driver.find_element_by_id("email")
+		elem.send_keys(self.fbusr)
+		elem = self.driver.find_element_by_id("pass")
+		elem.send_keys(self.fbpwd)
+		elem.send_keys(Keys.RETURN)
+		time.sleep(10)
+	
+	
 	def fb_load_profile_from_json(self,jsonpath):
 		profiledata={}
 		if os.path.exists(jsonpath):
@@ -199,12 +202,13 @@ class SoMACyborg:
 	
 	def fb_get_profile_data(self,url):
 		profiledata={}
+		profilepic={}
 		self.goto_url(url)
 		time.sleep(5)
 		
 		profile=self.driver.current_url
-		if profile=="http://facebook.com/profile.php":
-			plink=self.fbdriver.find_element_by_xpath("//a[@title='Profile']")
+		if profile=="http://www.facebook.com/profile.php":
+			plink=self.driver.find_element_by_xpath("//a[@title='Profile']")
 			profile=plink.get_attribute("href")
 			
 		
@@ -213,8 +217,22 @@ class SoMACyborg:
 	
 		profiledata['fbdisplayname']=self.fb_get_cur_page_displayname()
 		
+		self.driver.find_element_by_class_name("profilePic").click()
+		time.sleep(10)
+		profilepic['alttext']=self.driver.find_element_by_class_name("spotlight").get_property("alt")
+		profilepic['src']=self.driver.find_element_by_class_name("spotlight").get_property("src")
+		try:
+			localfile=self.download_file(profilepic['src'],prefix=profiledata['fbdisplayname'].replace(" ",""),suffix=".jpg")
+			profilepic['localfile']=localfile
+		
+		except:
+			print "Failed to download"
+		
+		
+		
 		profiledata['tabdata'] = self.fb_get_profile_tab_data(url)
 		profiledata['friendcount']=profiledata['tabdata']['friends']['count']
+		profiledata['profilepic']=profilepic
 		return profiledata
 		
 	def fb_get_profile_tab_data(self,profileurl):
@@ -233,13 +251,9 @@ class SoMACyborg:
 		tabdata['about']['url']=abouttab
 		return tabdata
 	
-		
 	def fb_update_self_profile(self):
 		self.fbprofiledata=self.fb_get_profile_data("http://facebook.com/profile.php")
 		
-		
-		
-	
 	def fb_get_cur_page_displayname(self):
 		displayname=self.driver.find_element_by_id("fb-timeline-cover-name").find_element_by_tag_name("a").text
 		return displayname
@@ -248,9 +262,6 @@ class SoMACyborg:
 		self.driver.get(pageurl)
 		likebutton=self.driver.find_element_by_xpath("//button[@data-testid='page_profile_like_button_test_id']")
 		likebutton.click()
-	
-		
- 	
 	
 	def fb_like_all_posts(self,pageurl,count=10):
 		self.driver.get(pageurl)
@@ -318,7 +329,6 @@ class SoMACyborg:
 			print "Sleeping for %s seconds" %sleeptime 
 			time.sleep(sleeptime)
 
-	
 	def fb_get_friends(self,count=50,friendspage=None,download_images=False):
 		if count>=self.fbfriendcount:
 			print "Not enough friends, but getting whoever is there"
@@ -369,27 +379,40 @@ class SoMACyborg:
 					
 
 		return friends
-	
-	
-	def fb_get_likers(self,url,count=10):
+		
+	def fb_get_pic_reacters(self,url,count=10,tries=10):
 		fblikers=[]
 		self.goto_url(url)
 		time.sleep(10)
+		profpic=self.driver.find_element_by_class_name("profilePic")
+		profpic.click()
 		while len(fblikers)<count:
-			
-			likes=self.driver.find_elements_by_class_name("_3emk")
-			for like in likes:
-				like.click()
-				time.sleep(10)
+			tries-=1
+			print tries
+			if tries==0:
+				break
+		
+			time.sleep(10)
+			try:
+				reacts=self.driver.find_elements_by_class_name("_4arz")
+				print reacts
+				reacts[len(reacts)-1].click()
+				time.sleep(5)
 				profiles=self.driver.find_elements_by_class_name("_5i_q")
-				for profile in profiles:
+				for profile in profiles:                               
 					psoup=BeautifulSoup(profile.get_property("innerHTML"))
 					a=psoup.find("a").get("href")
 					fblikers.append(a)
+					fblikers=list(set(fblikers))
 				self.close_modal()
-				time.sleep(10)
-			fblikers=list(set(fblikers))
-			self.scroll_page()
+				time.sleep(5)
+				
+			except:
+				print "No reactions"
+			try:
+				self.driver.find_element_by_class_name("next").click()
+			except:
+				break
 		return fblikers[:count]
 	
 	def fb_update_friends_json(self,frjson):
