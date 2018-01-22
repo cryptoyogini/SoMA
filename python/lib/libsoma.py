@@ -93,8 +93,16 @@ class SoMACyborg:
 		config=ConfigParser.ConfigParser()
 		config.read(configfile)
 		self.config=config
-		self.fbusr = config.get("User","fbusername")
-		self.fbpwd = config.get("User","fbpassword")
+		try:
+			self.fbusr = config.get("User","fbusername")
+			self.fbpwd = config.get("User","fbpassword")
+		except:
+			print "Cyborg did not have an FB id configured"
+		try:
+			self.googleusr = config.get("User","googleusername")
+			self.googlepwd = config.get("User","googlepassword")
+		except:
+			print "Cyborg did not have an Google id configured"
 		self.datapath=config.get("System","datapath")
 		sessionpathprefix=config.get("System","sessionpathprefix")
 		ts=datetime.now()
@@ -102,6 +110,9 @@ class SoMACyborg:
 		self.sessionpath=os.path.join(self.datapath,sessiondir)
 		self.sessiondownloaddir=os.path.join(self.sessionpath,"downloads")
 		self.sessionjsonpath=os.path.join(self.sessionpath,"json")
+		if not os.path.exists(self.datapath):
+			os.mkdir(self.datapath)
+		
 		if not os.path.exists(self.sessionpath):
 			os.mkdir(self.sessionpath)
 		if not os.path.exists(self.sessiondownloaddir):
@@ -179,11 +190,22 @@ class SoMACyborg:
 	def close_modal(self):
 		self.driver.find_element_by_link_text("Close").click()
 
-	
+	def google_login(self):
+		self.goto_url("https://accounts.google.com")
+		self.driver.find_element_by_id("identifierId")
+		user=self.driver.find_element_by_id("identifierId")
+		user.send_keys(self.googleusr)
+		user.send_keys(Keys.RETURN)
+		time.sleep(10)
+		self.driver.find_element_by_name("password")
+		passw=self.driver.find_element_by_name("password")
+		passw.send_keys(self.googlepwd)
+		passw.send_keys(Keys.RETURN)
+
 		
 	def fb_login(self):
 		# or you can use Chrome(executable_path="/usr/bin/chromedriver")
-		self.driver.get("http://www.facebook.com")
+		self.goto_url("http://www.facebook.com")
 		assert "Facebook" in self.driver.title
 		elem = self.driver.find_element_by_id("email")
 		elem.send_keys(self.fbusr)
@@ -192,6 +214,10 @@ class SoMACyborg:
 		elem.send_keys(Keys.RETURN)
 		time.sleep(10)
 	
+	def fb_get_album_from_profile(self,profileurl,count=5):
+		self.goto_url(profileurl+"/photos_albums")
+		
+		
 	
 	def fb_load_profile_from_json(self,jsonpath):
 		profiledata={}
@@ -219,8 +245,14 @@ class SoMACyborg:
 		
 		self.driver.find_element_by_class_name("profilePic").click()
 		time.sleep(10)
-		profilepic['alttext']=self.driver.find_element_by_class_name("spotlight").get_property("alt")
-		profilepic['src']=self.driver.find_element_by_class_name("spotlight").get_property("src")
+		try:
+			profilepic['alttext']=self.driver.find_element_by_class_name("spotlight").get_property("alt")
+			profilepic['src']=self.driver.find_element_by_class_name("spotlight").get_property("src")
+			profilepic['profileguard']=False
+		except:
+			profilepic['alttext']=self.driver.find_element_by_class_name("profilePic").get_property("alt")
+			profilepic['src']=self.driver.find_element_by_class_name("profilePic").get_property("src")
+			profilepic['profileguard']=True
 		try:
 			localfile=self.download_file(profilepic['src'],prefix=profiledata['fbdisplayname'].replace(" ",""),suffix=".jpg")
 			profilepic['localfile']=localfile
