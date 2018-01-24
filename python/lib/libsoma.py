@@ -444,7 +444,8 @@ class SoMACyborg:
 			try:
 				self.driver.find_element_by_class_name("next").click()
 			except:
-				break
+				print "Looks like a guarded profile"
+			
 		return fblikers[:count]
 	
 	def fb_update_friends_json(self,frjson):
