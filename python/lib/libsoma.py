@@ -13,6 +13,7 @@ import time,os,urllib2
 from datetime import datetime
 from uuid import *
 from pygments import highlight, lexers, formatters
+import pygsheets
 DEBUG=False
 
 
@@ -88,7 +89,7 @@ class SoMAPerson:
 		notes.append(notedict)
 		self.set_property("notes",notes)
 
-class SoMACyborg:
+class SoMACyborg(object):
 	def __init__(self,configfile,headless=False):
 		config=ConfigParser.ConfigParser()
 		config.read(configfile)
@@ -103,6 +104,16 @@ class SoMACyborg:
 			self.googlepwd = config.get("User","googlepassword")
 		except:
 			print "Cyborg did not have an Google id configured"
+		try:
+			self.outhstore = config.get("Google","outhstore")
+			self.outhfile = config.get("Google","outhfile")
+		except:
+			print "Cyborg did not get a google client secret"
+		try:
+			print "Trying to log in"
+			self.gc=pygsheets.authorize(outh_file=self.outhfile,outh_nonlocal=True,outh_creds_store=self.outhstore)
+		except:
+			print "Failed to log in to google drive"
 		self.datapath=config.get("System","datapath")
 		sessionpathprefix=config.get("System","sessionpathprefix")
 		ts=datetime.now()
@@ -112,7 +123,6 @@ class SoMACyborg:
 		self.sessionjsonpath=os.path.join(self.sessionpath,"json")
 		if not os.path.exists(self.datapath):
 			os.mkdir(self.datapath)
-		
 		if not os.path.exists(self.sessionpath):
 			os.mkdir(self.sessionpath)
 		if not os.path.exists(self.sessiondownloaddir):
@@ -125,8 +135,16 @@ class SoMACyborg:
 		
 		firefox_profile = webdriver.FirefoxProfile()
 		firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
+		firefox_profile.set_preference("browser.download.dir", self.sessiondownloaddir);
+		firefox_profile.set_preference("browser.download.folderList", 2);
+		firefox_profile.set_preference("browser.download.manager.showWhenStarting", False);
+		firefox_profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "text/plain, text/csv",)
 		driver = webdriver.Firefox(firefox_profile=firefox_profile)
 		self.driver=driver
+		
+		
+	
+	
 	
 	
 	def goto_url(self,url):
@@ -171,7 +189,9 @@ class SoMACyborg:
 
 	def scroll_page(self):
 		self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-		
+	
+	def scroll_up(self):
+		self.driver.execute_script("window.scrollTo(0,window.scrollY-450);")
 	
 	def scroll_to_bottom(self):
 		ticks_at_bottom = 0
