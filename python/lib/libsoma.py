@@ -90,10 +90,11 @@ class SoMAPerson:
 		self.set_property("notes",notes)
 
 class SoMACyborg(object):
-	def __init__(self,configfile,headless=False):
+	def __init__(self,configfile,launchbrowser=True,headless=False):
 		config=ConfigParser.ConfigParser()
 		config.read(configfile)
 		self.config=config
+		self.configfile=configfile
 		try:
 			self.fbusr = config.get("User","fbusername")
 			self.fbpwd = config.get("User","fbpassword")
@@ -108,9 +109,9 @@ class SoMACyborg(object):
 			self.outhstore = config.get("Google","outhstore")
 			self.outhfile = config.get("Google","outhfile")
 		except:
-			print "Cyborg did not get a google client secret"
+			print "Cyborg did not get a Google drive client secret"
 		try:
-			print "Trying to log in"
+			print "Trying to log in to Google drive"
 			self.gc=pygsheets.authorize(outh_file=self.outhfile,outh_nonlocal=True,outh_creds_store=self.outhstore)
 		except:
 			print "Failed to log in to google drive"
@@ -131,8 +132,16 @@ class SoMACyborg(object):
 			os.mkdir(self.sessionjsonpath)
 		
 		if headless==True:
+			print "Headless cyborg..."
 			os.environ['MOZ_HEADLESS'] = '1'
+		if launchbrowser==True:
+			print "Since you asked for a browser..." 	
+			self.driver=self.get_driver()
+		else:
+			self.driver=None
 		
+	
+	def get_driver(self):
 		firefox_profile = webdriver.FirefoxProfile()
 		firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
 		firefox_profile.set_preference("browser.download.dir", self.sessiondownloaddir);
@@ -140,12 +149,7 @@ class SoMACyborg(object):
 		firefox_profile.set_preference("browser.download.manager.showWhenStarting", False);
 		firefox_profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "text/plain, text/csv",)
 		driver = webdriver.Firefox(firefox_profile=firefox_profile)
-		self.driver=driver
-		
-		
-	
-	
-	
+		return driver
 	
 	def goto_url(self,url):
  		self.driver.get(url)
