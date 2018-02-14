@@ -15,8 +15,8 @@ from uuid import *
 from pygments import highlight, lexers, formatters
 import pygsheets
 DEBUG=False
-
-
+from shutil import copyfile
+from copy import deepcopy
 
 '''
 SoMA Post objects store a JSON object as a named tuple as well as a dictionary, so that attributes can be referenced both in the dot notation as well as by key/value lookups. 
@@ -88,7 +88,46 @@ class SoMAPerson:
 		notedict['text']=text
 		notes.append(notedict)
 		self.set_property("notes",notes)
-
+	def export(self,exportpath):
+		self.show_profile()
+		newjson=deepcopy(self.jsonprofile)
+		print "Copyting fbprofiles..."
+		i=0
+		for fbprofile in self.jsonprofile['fbprofiles']:
+			print "Original path ", fbprofile
+			print "New path ", os.path.join(exportpath,os.path.split(fbprofile)[1])
+			copyfile(fbprofile, os.path.join(exportpath,os.path.split(fbprofile)[1]))
+			
+			newjson['fbprofiles'][i]= os.path.join(exportpath,os.path.split(fbprofile)[1])
+			i+=1
+		i=0
+		print "Copyting imagesets..."
+		for imageset in self.jsonprofile['imagesets']:
+			print "Original path ", imageset
+			print "New path ", os.path.join(exportpath,os.path.split(imageset)[1])	
+			copyfile(imageset, os.path.join(exportpath,os.path.split(imageset)[1]))
+			newjson['imagesets'][i]= os.path.join("./",os.path.split(imageset)[1])
+			i+=1
+		print "Copying profilepic..."
+		print "Original path ", self.jsonprofile['profilepic']['localfile']
+		print "Original path ", os.path.join(exportpath,os.path.split(self.jsonprofile['profilepic']['localfile'])[1])
+		copyfile(self.jsonprofile['profilepic']['localfile'], os.path.join(exportpath,os.path.split(self.jsonprofile['profilepic']['localfile'])[1]))
+			
+		newjson['profilepic']['localfile']=os.path.join("./",os.path.split(self.jsonprofile['profilepic']['localfile'])[1])
+		
+		print get_color_json(newjson)
+		newfile=os.path.join(exportpath,os.path.split(self.jsonfile)[1])
+		with open(newfile,"w") as f:
+			f.write(json.dumps(newjson,indent=4,sort_keys=True))
+		for imageset in newjson['imagesets']:
+			print imageset
+			with open(imageset,"r") as f:
+				imagesetjson=json.loads(f.read())
+			for image in imagesetjson:
+				print image
+		for fbprofile in newjson['fbprofiles']:
+			print fbprofile
+			
 class SoMACyborg(object):
 	def __init__(self,configfile,launchbrowser=True,headless=False):
 		config=ConfigParser.ConfigParser()
@@ -531,3 +570,4 @@ class SoMACyborg(object):
 		imageset=self.fb_download_image_set(imageset)
 		jsonname=self.save_json(imageset,filename=imageset['name']+".json")
 		return jsonname
+	
