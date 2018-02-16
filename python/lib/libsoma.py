@@ -98,7 +98,7 @@ class SoMAPerson:
 			print "New path ", os.path.join(exportpath,os.path.split(fbprofile)[1])
 			copyfile(fbprofile, os.path.join(exportpath,os.path.split(fbprofile)[1]))
 			
-			newjson['fbprofiles'][i]= os.path.join(exportpath,os.path.split(fbprofile)[1])
+			newjson['fbprofiles'][i]= os.path.join("./",os.path.split(fbprofile)[1])
 			i+=1
 		i=0
 		print "Copyting imagesets..."
@@ -120,11 +120,11 @@ class SoMAPerson:
 		with open(newfile,"w") as f:
 			f.write(json.dumps(newjson,indent=4,sort_keys=True))
 		for imageset in newjson['imagesets']:
-			print imageset
-			with open(imageset,"r") as f:
+			imagesetpath = os.path.join(exportpath,os.path.split(imageset)[1])
+			with open(imagesetpath,"r") as f:
 				imagesetjson=json.loads(f.read())
-			for image in imagesetjson:
-				print image
+			for image in imagesetjson['images']:
+				print image['localfile']
 		for fbprofile in newjson['fbprofiles']:
 			print fbprofile
 			
