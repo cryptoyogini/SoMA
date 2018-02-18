@@ -17,6 +17,17 @@ import pygsheets
 DEBUG=False
 from shutil import copyfile
 from copy import deepcopy
+import coloredlogs, logging
+
+
+
+SOMA_FIELD_STYLES={'hostname': {'color': 'magenta'}, 'programname': {'color': 'cyan'}, 'name': {'color': 'cyan', 'bold': True}, 'levelname': {'color': 'green', 'bold': True}, 'asctime': {'color': 'green'}}
+
+SOMA_LEVEL_STYLES={'info': {'color': 'blue'}, 'notice': {'color': 'magenta'}, 'verbose': {}, 'success': {'color': 'green', 'bold': True}, 'spam': {'color': 'green', 'faint': True}, 'critical': {'color': 'red', 'bold': True}, 'error': {'color': 'red'}, 'debug': {'color': 'green'}, 'warning': {'color': 'yellow'}}
+
+SOMA_CONSOLE_FORMAT="%(asctime)s %(name)s-[%(funcName)s] %(levelname)s : %(message)s"
+
+SOMA_LOG_FORMAT="%(asctime)s %(hostname)s %(name)s[%(funcName)s] %(levelname)s : %(message)s"
 
 '''
 SoMA Post objects store a JSON object as a named tuple as well as a dictionary, so that attributes can be referenced both in the dot notation as well as by key/value lookups. 
@@ -57,6 +68,7 @@ class SoMAPerson:
 				self.jsonprofile=json.loads(f.read())
 			self.uuid=self.jsonprofile['uuid']
 	def show_profile(self):
+		self.logger.info("Showing self profile")
 		print get_color_json(self.jsonprofile)
 	def save_profile(self):
 		with open(self.jsonfile,"w") as f:
@@ -91,31 +103,31 @@ class SoMAPerson:
 	def export(self,exportpath):
 		self.show_profile()
 		newjson=deepcopy(self.jsonprofile)
-		print "Copyting fbprofiles..."
+		self.logger.info("Copyting fbprofiles...")
 		i=0
 		for fbprofile in self.jsonprofile['fbprofiles']:
-			print "Original path ", fbprofile
-			print "New path ", os.path.join(exportpath,os.path.split(fbprofile)[1])
+			self.logger.info("Original path " + fbprofile)
+			self.logger.info("New path "+os.path.join(exportpath,os.path.split(fbprofile)[1]))
 			copyfile(fbprofile, os.path.join(exportpath,os.path.split(fbprofile)[1]))
 			
 			newjson['fbprofiles'][i]= os.path.join("./",os.path.split(fbprofile)[1])
 			i+=1
 		i=0
-		print "Copyting imagesets..."
+		self.logger.info("Copyting imagesets...")
 		for imageset in self.jsonprofile['imagesets']:
-			print "Original path ", imageset
-			print "New path ", os.path.join(exportpath,os.path.split(imageset)[1])	
+			self.logger.info("Original path " + imageset)
+			self.logger.info("New path " + os.path.join(exportpath,os.path.split(imageset)[1]))
 			copyfile(imageset, os.path.join(exportpath,os.path.split(imageset)[1]))
 			newjson['imagesets'][i]= os.path.join("./",os.path.split(imageset)[1])
 			i+=1
-		print "Copying profilepic..."
-		print "Original path ", self.jsonprofile['profilepic']['localfile']
+		self.logger.info("Copying profilepic...")
+		self.logger.info("Original path " + self.jsonprofile['profilepic']['localfile'])
 		print "Original path ", os.path.join(exportpath,os.path.split(self.jsonprofile['profilepic']['localfile'])[1])
 		copyfile(self.jsonprofile['profilepic']['localfile'], os.path.join(exportpath,os.path.split(self.jsonprofile['profilepic']['localfile'])[1]))
 			
 		newjson['profilepic']['localfile']=os.path.join("./",os.path.split(self.jsonprofile['profilepic']['localfile'])[1])
 		
-		print get_color_json(newjson)
+		#print get_color_json(newjson)
 		newfile=os.path.join(exportpath,os.path.split(self.jsonfile)[1])
 		with open(newfile,"w") as f:
 			f.write(json.dumps(newjson,indent=4,sort_keys=True))
@@ -135,25 +147,13 @@ class SoMACyborg(object):
 		self.config=config
 		self.configfile=configfile
 		try:
-			self.fbusr = config.get("User","fbusername")
-			self.fbpwd = config.get("User","fbpassword")
+			self.name=config.get("System","name")			
 		except:
-			print "Cyborg did not have an FB id configured"
-		try:
-			self.googleusr = config.get("User","googleusername")
-			self.googlepwd = config.get("User","googlepassword")
-		except:
-			print "Cyborg did not have an Google id configured"
-		try:
-			self.outhstore = config.get("Google","outhstore")
-			self.outhfile = config.get("Google","outhfile")
-		except:
-			print "Cyborg did not get a Google drive client secret"
-		try:
-			print "Trying to log in to Google drive"
-			self.gc=pygsheets.authorize(outh_file=self.outhfile,outh_nonlocal=True,outh_creds_store=self.outhstore)
-		except:
-			print "Failed to log in to google drive"
+			self.name="SoMA Cyborg"
+		self.logger=logging.getLogger(self.name)
+		coloredlogs.install(level="DEBUG",logger=self.logger,fmt=SOMA_CONSOLE_FORMAT,level_styles=SOMA_LEVEL_STYLES,field_styles=SOMA_FIELD_STYLES)
+		self.logger.info("Hi there....let me just find my bearings from the config file " + self.configfile)
+		self.logger.info("Setting up the directories for this session...")
 		self.datapath=config.get("System","datapath")
 		sessionpathprefix=config.get("System","sessionpathprefix")
 		ts=datetime.now()
@@ -162,19 +162,51 @@ class SoMACyborg(object):
 		self.sessiondownloaddir=os.path.join(self.sessionpath,"downloads")
 		self.sessionjsonpath=os.path.join(self.sessionpath,"json")
 		if not os.path.exists(self.datapath):
+			self.logger.info("Data path %s did not exist, so creating it" %(self.datapath))
 			os.mkdir(self.datapath)
 		if not os.path.exists(self.sessionpath):
+			self.logger.info("Creating a new path %s for this session" %self.sessionpath)
 			os.mkdir(self.sessionpath)
 		if not os.path.exists(self.sessiondownloaddir):
+			self.logger.info("Creating a new download path %s for this session" %self.sessiondownloaddir)
 			os.mkdir(self.sessiondownloaddir)
 		if not os.path.exists(self.sessionjsonpath):
+			self.logger.info("Creating a new json path %s for this session" %self.sessionjsonpath)
 			os.mkdir(self.sessionjsonpath)
+		logFormatter=logging.Formatter(SOMA_LOG_FORMAT)
+		fileHandler = logging.FileHandler("{0}/{1}.log".format(self.sessionpath, "somasession"))
+		fileHandler.setFormatter(logFormatter)
+		fileHandler.addFilter(coloredlogs.HostNameFilter())
+		self.logger.addHandler(fileHandler)
+	
+		self.logger.info("Saving messages to log at " + os.path.join(self.sessionpath,"somasession.log"))
+		
+		try:
+			self.fbusr = config.get("User","fbusername")
+			self.fbpwd = config.get("User","fbpassword")
+		except:
+			self.logger.warning("Cyborg did not have an FB id configured")
+		try:
+			self.googleusr = config.get("User","googleusername")
+			self.googlepwd = config.get("User","googlepassword")
+		except:
+			self.logger.warning("Cyborg did not have an Google id configured")
+		try:
+			self.outhstore = config.get("Google","outhstore")
+			self.outhfile = config.get("Google","outhfile")
+		except:
+			self.logger.warning("Cyborg did not get a Google drive client secret")
+		try:
+			self.logger.info("Trying to log in to Google drive")
+			self.gc=pygsheets.authorize(outh_file=self.outhfile,outh_nonlocal=True,outh_creds_store=self.outhstore)
+		except:
+			self.logger.warning("Failed to log in to google drive")
 		
 		if headless==True:
-			print "Headless cyborg..."
+			self.logger.info("I am a headless cyborg...")
 			os.environ['MOZ_HEADLESS'] = '1'
 		if launchbrowser==True:
-			print "Since you asked for a browser..." 	
+			self.logger.info("Since you asked for a browser..." 	)
 			self.driver=self.get_driver()
 		else:
 			self.driver=None
@@ -191,10 +223,17 @@ class SoMACyborg(object):
 		return driver
 	
 	def goto_url(self,url):
- 		self.driver.get(url)
+		if self.driver==None:
+			self.logger.error("No web driver")
+			return None
+ 		self.logger.info("Trying to go to URL " + url)
+ 		try: 
+			self.driver.get(url)
+		except Exception as e:
+			self.logger.error("Could not go to URL " +url+" because "+repr(e))
  			
 	def download_file(self,url,path=None,filename=None,prefix=None,suffix=None):
-		print "Trying to download "+ url
+		self.logger.info("Trying to download "+ url)
 		if path==None:
 			path=self.sessiondownloaddir
 		if filename==None:
@@ -216,7 +255,7 @@ class SoMACyborg(object):
 			return None
 	
 	def save_json(self,jsonobj,path=None,filename=None):
-		print "Trying to save json"
+		self.logger.info("Trying to save json")
 		if path==None:
 			path=self.sessionjsonpath
 		if filename==None:
@@ -226,8 +265,10 @@ class SoMACyborg(object):
 			f=open(fname,"w")
 			f.write(json.dumps(jsonobj,indent=4,sort_keys=True))
 			f.close()
+			self.logger.info("Saved json to file " + fname)
 			return fname
-		except:
+		except Exception as exception:
+			self.logger.error("Could not save JSON..."+repr(exception))
 			return None
 
 	def scroll_page(self):
@@ -248,35 +289,56 @@ class SoMACyborg(object):
 			else:
 				self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 				ticks_at_bottom = 0
-		print("At bottom of page.")
+		self.logger.info("At bottom of page")
 		
 	def close_modal(self):
 		self.driver.find_element_by_link_text("Close").click()
 
 	def google_login(self):
-		self.goto_url("https://accounts.google.com")
-		self.driver.find_element_by_id("identifierId")
-		user=self.driver.find_element_by_id("identifierId")
-		user.send_keys(self.googleusr)
-		user.send_keys(Keys.RETURN)
-		time.sleep(10)
-		self.driver.find_element_by_name("password")
-		passw=self.driver.find_element_by_name("password")
-		passw.send_keys(self.googlepwd)
-		passw.send_keys(Keys.RETURN)
+		self.logger.info("Trying to log into Google...")
+		try:
+			self.goto_url("https://accounts.google.com")
+			self.driver.find_element_by_id("identifierId")
+			user=self.driver.find_element_by_id("identifierId")
+			user.send_keys(self.googleusr)
+			user.send_keys(Keys.RETURN)
+			time.sleep(10)
+			self.driver.find_element_by_name("password")
+			passw=self.driver.find_element_by_name("password")
+			passw.send_keys(self.googlepwd)
+			passw.send_keys(Keys.RETURN)
+		except Exception as e:
+			self.logger.error("Could not log into Google..."+repr(e))
+			
 
 		
 	def fb_login(self):
 		# or you can use Chrome(executable_path="/usr/bin/chromedriver")
-		self.goto_url("http://www.facebook.com")
-		assert "Facebook" in self.driver.title
-		elem = self.driver.find_element_by_id("email")
-		elem.send_keys(self.fbusr)
-		elem = self.driver.find_element_by_id("pass")
-		elem.send_keys(self.fbpwd)
-		elem.send_keys(Keys.RETURN)
-		time.sleep(10)
+		self.logger.info("Trying to log into FB...")
+		try:
+			self.goto_url("http://www.facebook.com")
+			assert "Facebook" in self.driver.title
+			elem = self.driver.find_element_by_id("email")
+			elem.send_keys(self.fbusr)
+			elem = self.driver.find_element_by_id("pass")
+			elem.send_keys(self.fbpwd)
+			elem.send_keys(Keys.RETURN)
+			time.sleep(10)
+			self.goto_url("http://facebook.com/profile.php")
+			time.sleep(10)
+			self.logger.info("Successfully logged into FB")
+		except Exception as exception:
+			self.logger.error("Could not log into FB.."+ repr(exception))
 	
+	
+	def fb_search(self,searchstring):
+		self.logger.info("Searching FB for " + searchstring)
+		searchbar=self.driver.find_element_by_name("q")
+		searchbar.clear()
+		searchbar.send_keys(searchstring)
+		searchbar.send_keys(Keys.ENTER)
+		time.sleep(10)
+		
 	def fb_get_album_from_profile(self,profileurl,count=5):
 		self.goto_url(profileurl+"/photos_albums")
 		
@@ -321,7 +383,7 @@ class SoMACyborg(object):
 			profilepic['localfile']=localfile
 		
 		except:
-			print "Failed to download"
+			self.logger.error("Failed to download")
 		
 		
 		
@@ -371,7 +433,7 @@ class SoMACyborg(object):
 					button.click()
 					time.sleep(2)
 				except:
-					print "Ouch!"
+					self.logger.error("Ouch! Couldn't like that!")
 				time.sleep(5)
 			self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);") 		
 		
@@ -395,7 +457,7 @@ class SoMACyborg(object):
 		self.driver.get("https://facebook.com/notifications")
 		last_height = self.driver.execute_script("return document.body.scrollHeight")
 		self.scroll_to_bottom()
-		print last_height
+		#print last_height
 		time.sleep(5)
 		notifications=[]
 		while len(notifications)<count:
@@ -404,7 +466,7 @@ class SoMACyborg(object):
 			scroll_to_bottom(driver)
 			time.sleep(5)
 			new_height= self.driver.execute_script("return document.body.scrollHeight")
-			print new_height
+			#print new_height
 			
 			if new_height==last_height:
 				break
@@ -416,17 +478,17 @@ class SoMACyborg(object):
 			sleeptime=73+2*i
 			msg=os.popen("fortune %s" %fortunefile).read().strip()
 			msg=msg+"\n"+hashtag
-			print msg
+			self.logger.info("The post content is - " + msg)
 			try:
 				self.fb_post_to_wall(msg,wallurl)
 			except:
-				print "Post failed, trying again in %s seconds" %sleeptime 
+				self.logger.error("Post failed, trying again in %s seconds" %sleeptime )
 			print "Sleeping for %s seconds" %sleeptime 
 			time.sleep(sleeptime)
 
 	def fb_get_friends(self,count=50,friendspage=None,download_images=False):
 		if count>=self.fbfriendcount:
-			print "Not enough friends, but getting whoever is there"
+			self.logger.warning("Not enough friends, but getting whoever is there")
 			count=self.fbfriendcount
 		friends=[]
 		if friendspage==None:
@@ -439,7 +501,7 @@ class SoMACyborg(object):
 			frienddivs+=newfrienddivs
 			frienddivs=list(set(frienddivs))
 			if len(frienddivs)==prevlen:
-				print "Some of this persons friends have gone away"
+				self.logger.warning("Some of this persons friends have gone away")
 				break
 			self.scroll_to_bottom()
 			time.sleep(10)
@@ -483,14 +545,14 @@ class SoMACyborg(object):
 		profpic.click()
 		while len(fblikers)<count:
 			tries-=1
-			print tries
+			self.logger.info("Attempt # " + str(tries))
 			if tries==0:
 				break
 		
 			time.sleep(10)
 			try:
 				reacts=self.driver.find_elements_by_class_name("_4arz")
-				print reacts
+				self.logger.info("Reactors" + str(reacts))
 				reacts[len(reacts)-1].click()
 				time.sleep(5)
 				profiles=self.driver.find_elements_by_class_name("_5i_q")
@@ -503,11 +565,11 @@ class SoMACyborg(object):
 				time.sleep(5)
 				
 			except:
-				print "No reactions"
+				self.logger.warning("No reactions")
 			try:
 				self.driver.find_element_by_class_name("next").click()
 			except:
-				print "Looks like a guarded profile"
+				self.logger.warning("Looks like a guarded profile")
 			
 		return fblikers[:count]
 	
@@ -537,7 +599,7 @@ class SoMACyborg(object):
 			image['alttext']=alttext
 			image['src']=imagesrc
 			if skip>0:
-				print "Skipping this image"
+				self.logger.info("Skipping this image")
 				skip=skip-1
 				self.driver.find_element_by_class_name("next").click()
 				continue
