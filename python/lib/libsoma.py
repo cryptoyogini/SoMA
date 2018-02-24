@@ -29,9 +29,6 @@ SOMA_CONSOLE_FORMAT="%(asctime)s %(name)s-[%(funcName)s] %(levelname)s : %(messa
 
 SOMA_LOG_FORMAT="%(asctime)s %(hostname)s %(name)s[%(funcName)s] %(levelname)s : %(message)s"
 
-'''
-SoMA Post objects store a JSON object as a named tuple as well as a dictionary, so that attributes can be referenced both in the dot notation as well as by key/value lookups. 
-'''
 
 def get_color_json(dictionary):
 	formatted_json=get_formatted_json(dictionary)
@@ -67,19 +64,41 @@ class SoMAPerson:
 			with open(jsonfile,"r") as f:
 				self.jsonprofile=json.loads(f.read())
 			self.uuid=self.jsonprofile['uuid']
+		try:
+			self.name=self.get_property("name")			
+		except:
+			self.name=self.get_property("uuid")
+		
+	def update_name(self):
+		try:
+			self.name=self.get_property("name")			
+		except:
+			self.name=self.get_property("uuid")
+		logFormatter=logging.Formatter(SOMA_LOG_FORMAT)
+		fileHandler = logging.FileHandler("{0}/{1}.log".format(os.path.split(self.jsonfile)[0], "somasession"))
+		fileHandler.setFormatter(logFormatter)
+		fileHandler.addFilter(coloredlogs.HostNameFilter())
+		self.logger.addHandler(fileHandler)
+	
+		self.logger.info("Saving messages to log at " + os.path.join(os.path.split(self.jsonfile)[0],"somasession.log"))
+		
 	def show_profile(self):
 		self.logger.info("Showing self profile")
 		print get_color_json(self.jsonprofile)
+	
 	def save_profile(self):
 		with open(self.jsonfile,"w") as f:
 			f.write(json.dumps(self.jsonprofile,indent=4,sort_keys=True))
+	
 	def get_property(self,propertyname):
 		if propertyname in self.jsonprofile.keys():
 			return self.jsonprofile[propertyname]
 		else:
 			return None
+	
 	def set_property(self,propertyname,value):
 		self.jsonprofile[propertyname]=value
+	
 	def populate_fbprofile(self,cyborg,url):
 		fbprofile=cyborg.fb_get_profile_data(url)
 		fbprofilejson=cyborg.save_json(fbprofile,path=os.path.split(self.jsonfile)[0])
@@ -90,6 +109,7 @@ class SoMAPerson:
 		self.set_property("fbprofiles",fbprofiles)
 		self.set_property("name",fbprofile['fbdisplayname'].replace("\n"," "))
 		self.set_property("profilepic",fbprofile['profilepic'])
+	
 	def add_note(self,text):
 		notes=self.get_property("notes")
 		if notes==None:
@@ -100,6 +120,7 @@ class SoMAPerson:
 		notedict['text']=text
 		notes.append(notedict)
 		self.set_property("notes",notes)
+	
 	def export(self,exportpath):
 		self.show_profile()
 		newjson=deepcopy(self.jsonprofile)
@@ -196,11 +217,7 @@ class SoMACyborg(object):
 			self.outhfile = config.get("Google","outhfile")
 		except:
 			self.logger.warning("Cyborg did not get a Google drive client secret")
-		try:
-			self.logger.info("Trying to log in to Google drive")
-			self.gc=pygsheets.authorize(outh_file=self.outhfile,outh_nonlocal=True,outh_creds_store=self.outhstore)
-		except:
-			self.logger.warning("Failed to log in to google drive")
+		
 		
 		if headless==True:
 			self.logger.info("I am a headless cyborg...")
@@ -210,8 +227,7 @@ class SoMACyborg(object):
 			self.driver=self.get_driver()
 		else:
 			self.driver=None
-		
-	
+
 	def get_driver(self):
 		firefox_profile = webdriver.FirefoxProfile()
 		firefox_profile.set_preference("browser.privatebrowsing.autostart", True)
@@ -310,7 +326,12 @@ class SoMACyborg(object):
 		except Exception as e:
 			self.logger.error("Could not log into Google..."+repr(e))
 			
-
+	def gdrive_login(self):
+		try:
+			self.logger.info("Trying to log in to Google drive")
+			self.gc=pygsheets.authorize(outh_file=self.outhfile,outh_nonlocal=True,outh_creds_store=self.outhstore)
+		except:
+			self.logger.warning("Failed to log in to google drive")
 		
 	def fb_login(self):
 		# or you can use Chrome(executable_path="/usr/bin/chromedriver")
@@ -330,7 +351,6 @@ class SoMACyborg(object):
 		except Exception as exception:
 			self.logger.error("Could not log into FB.."+ repr(exception))
 	
-	
 	def fb_search(self,searchstring):
 		self.logger.info("Searching FB for " + searchstring)
 		searchbar=self.driver.find_element_by_name("q")
@@ -341,9 +361,7 @@ class SoMACyborg(object):
 		
 	def fb_get_album_from_profile(self,profileurl,count=5):
 		self.goto_url(profileurl+"/photos_albums")
-		
-		
-	
+			
 	def fb_load_profile_from_json(self,jsonpath):
 		profiledata={}
 		if os.path.exists(jsonpath):
@@ -619,6 +637,7 @@ class SoMACyborg(object):
 			imagefile=self.download_file(image['src'],prefix=imageset['prefix'],suffix=".jpg")
 			image['localfile']=imagefile
 		return imageset
+	
 	def fb_get_image_set(self,url,count=50,skip=0,setname=None):
 		imageset={}
 		if setname==None:
